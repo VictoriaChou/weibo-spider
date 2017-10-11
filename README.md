@@ -4,7 +4,7 @@
 
 ## 技术栈
 
-python2.7 + MongoDB
+> python2.7 + MongoDB
 
 ## 数据库设计
 	- fans
