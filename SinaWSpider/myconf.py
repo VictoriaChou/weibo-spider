@@ -4,7 +4,6 @@ import json
 import time
 import random
 
-#用户账号列表，用“|”分隔用户名和密码
 userlist = [
     "khocs4424146@163.com|3hnfvlc2iw",
     "kongou3541274z@163.com|4csqji0ovm",
@@ -14,7 +13,6 @@ userlist = [
     
 ]
 
-#"http": "http://127.0.0.1:8087
 fr = open("proxy.data", "r")
 proxy_pool = [line.strip() for line in fr.readlines()]
 fr.close()
@@ -24,24 +22,18 @@ def swithProxy():
     proxy["http"] = random.choice(proxy_pool)
     return proxy
 
-#加载conf.ini配置文件，读取相关参数
 conf = ConfigParser.ConfigParser()
 conf.read("conf.ini")
 try:
-    #conn params
     headers = json.loads(conf.get("conn_params", "headers"))
-    #API params
     access_token = conf.get("sina_api", "access_token") 
     app_key = conf.get("sina_api", "app_key") 
 except Exception, e:
     print "init params error! " + str(e)
     pass
 
-#初始化log输出路径
 log_out_path = 'output/log/log_' + time.strftime("%Y%m%d", time.localtime()) + '.log'
 
-
-#用于替换的User-Agent
 agent_list = [
     "Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/54.0.2840.87 Safari/537.36",
     "Mozilla/2.02E (Win95; U)",

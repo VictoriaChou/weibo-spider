@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 """
-Created on Tue Nov 08 10:14:38 2016
+Created on 2017-09-10
 
-@author: liudiwei
+@author: VictoriaChou
 """
 import os
 import json
@@ -25,34 +25,25 @@ sys.setdefaultencoding('utf8')
 
 class SinaClient(object):
     def __init__(self, username=None, password=None):
-        #用户输入的用户名与密码
         self.username = username
         self.password = password
-        #从prelogin.php中获取的数据
         self.servertime = None
         self.nonce = None
         self.pubkey = None
         self.rsakv = None
-        #请求时提交的数据列表
         self.post_data = None
         self.headers = {}
-        #用于存储登录后的session
         self.session = None   
         self.cookiejar = None
-        #用于输出log信息
         self.logger = None
-        #登录状态，初始化为False，表示未登录状态
         self.status = False
-        #微博API必备信息
         self.access_token = None
         self.app_key = None
-        #初始时调用initParams方法，初始化相关参数
         self.initParams()
         self.timeout = 3
         socket.setdefaulttimeout(3)
         self.tryTimes = 8
 
-    #初始化参数
     def initParams(self):
         self.logger = LogClient().createLogger('SinaWSpider', myconf.log_out_path)
         self.headers = myconf.headers
@@ -60,25 +51,21 @@ class SinaClient(object):
         self.app_key = myconf.app_key
         return self
 
-    #设置username 和 password
     def setAccount(self, username, password):
         self.username = username
         self.password = password
         return self
     
-    #设置post_data
     def setPostData(self):
         self.servertime, self.nonce, self.pubkey, self.rsakv = dataEncode.get_prelogin_info()
         self.post_data = dataEncode.encode_post_data(self.username, self.password, self.servertime, self.nonce, self.pubkey, self.rsakv)
         return self
     
-    #使用用户代理，更换header中的User-Agent
     def switchUserAgent(self, enableAgent=True):
         user_agent = random.choice(myconf.agent_list)
         self.headers["User-Agent"] = user_agent
         return self
 
-    #用于切换用户账号，防止长时间爬取账号被禁
     def switchUserAccount(self, userlist):
         is_login = False
         while not is_login: 
@@ -93,7 +80,6 @@ class SinaClient(object):
             is_login = True
         return self
     
-    #生成Cookie,接下来的所有get和post请求都带上已经获取的cookie
     def enableCookie(self, enableProxy=False):
         self.cookiejar = cookielib.LWPCookieJar()  # 建立COOKIE
         cookie_support = urllib2.HTTPCookieProcessor(self.cookiejar)
@@ -101,15 +87,11 @@ class SinaClient(object):
         urllib2.install_opener(opener)
         return self
     
-    #使用urllib2模拟登录过程
     def login(self, username=None, password=None):
-        self.status = False #重新将登录状态设置为False
         self.logger.info("Start to login...")
-        #根据用户名和密码给默认参数赋值,并初始化post_data
         self.setAccount(username, password) 
         self.setPostData()
         self.enableCookie(enableProxy=True)
-        #登录时请求的url
         login_url = r'https://login.sina.com.cn/sso/login.php?client=ssologin.js(v1.4.15)'
         headers = self.headers
         try:  
@@ -119,7 +101,6 @@ class SinaClient(object):
             if jsonText["retcode"] == "0":
                 self.logger.info("Login success!")
                 self.status = True
-                #将cookie加入到headers中
                 cookies = ';'.join([cookie.name + "=" + cookie.value for cookie in self.cookiejar])
                 headers["Cookie"] = cookies
             else:
@@ -129,7 +110,6 @@ class SinaClient(object):
         self.headers = headers
         return self
     
-    #打开url时携带headers,此header需携带cookies
     def openURL(self, url, data=None, tryTimes=1):
         text = ""
         if tryTimes < self.tryTimes:
@@ -141,9 +121,8 @@ class SinaClient(object):
                 self.logger.error("openURL error, " + str(e))
                 self.switchUserAccount(myconf.userlist)
                 text = self.openURL(url, data=data, tryTimes = tryTimes+1)
-        return text #self.unzip(text)
+        return text
     
-    #功能：将文本内容输出至本地
     def output(self, content, out_path, save_mode="w"):
         self.logger.info("Save page to: " + out_path)
         prefix = os.path.dirname(out_path)
@@ -154,38 +133,6 @@ class SinaClient(object):
         fw.close()
         return self
     
-    """
-    @Desc:使用微博API:待完善
-    Access Token: 2.00ojIyoBWed7FC573b7abad1geUrOE
-    app_key: 1912496300  
-    说明：API接口限制太多，很多接口只能获取当前登录用户的信息，无法获取好友的信息，所以干脆放弃了
-    """    
-    #************************************************************************** 
-    def getApiJSONData(self, url, params, post_data=None):
-        cmb_params = '&'.join([x + "=" + str(params[x]) for x in params.keys()])
-        url += "?" + cmb_params 
-        req = urllib2.Request(url, data=post_data, headers=self.headers)
-        text = urllib2.urlopen(req).read()
-        return self.unzip(text)
-    
-    #使用微博API获取用户信息
-    def getUserInfo(self, uid):
-        url = "https://api.weibo.com/2/users/show.json"
-        params = {"access_token": self.access_token, "uid": uid}
-        jsonRes = self.getApiJSONData(url, params)
-        self.output(jsonRes, "output/" + uid + ".json")
-        return jsonRes
-    
-    #获取用户关注对象UID列表 friendship/friends/ids
-    def getFriendUidList(self, uid):
-        url = "https://api.weibo.com/2/friendships/friends.json"
-        params = {"access_token": self.access_token, "uid": uid}
-        jsonRes = self.getApiJSONData(url, params)
-        self.output(jsonRes, "output/" + uid + ".json")
-        return jsonRes
-        
-    #**************************************************************************
-    #获取用户个人信息
     def getUserInfos(self, uid):
         url_app = "http://weibo.cn/%s/info" %uid
         text_app = self.openURL(url_app)
@@ -198,25 +145,21 @@ class SinaClient(object):
         sexorientation = re.findall(u'\u6027\u53d6\u5411[:|\uff1a](.*?)<br', soup_app)  # 性取向
         marriage = re.findall(u'\u611f\u60c5\u72b6\u51b5[:|\uff1a](.*?)<br', soup_app)  # 婚姻状况
         homepage = re.findall(u'\u4e92\u8054\u7f51[:|\uff1a](.*?)<br', soup_app)  #首页链接
-        #根据app主页获取数据
         app_page = "http://weibo.cn/%s" %uid
         text_homepage = self.openURL(app_page)
         soup_home = unicode(BS(text_homepage, "html.parser"))
         tweets_count = re.findall(u'\u5fae\u535a\[(\d+)\]', soup_home)
         follows_count = re.findall(u'\u5173\u6ce8\[(\d+)\]', soup_home)
         fans_count = re.findall(u'\u7c89\u4e1d\[(\d+)\]', soup_home)
-        #根据web用户详情页获取注册日期
         url_web = "http://weibo.com/%s/info" %uid
         text_web = self.openURL(url_web)
         reg_date = re.findall(r"\d{4}-\d{2}-\d{2}", text_web)
-        #根据标签详情页获取标签        
         tag_url = "http://weibo.cn/account/privacy/tags/?uid=%s" %uid
         text_tag = self.openURL(tag_url)      
         soup_tag = BS(text_tag, "html.parser")
         res = soup_tag.find_all('div', {"class":"c"})
         tags = "|".join([elem.text for elem in res[2].find_all("a")])
         
-        #将用户信息合并        
         userinfo = {}
         userinfo["uid"] = uid
         userinfo["nickname"] = nickname[0] if nickname else ""
@@ -234,7 +177,6 @@ class SinaClient(object):
         userinfo["tags"] = tags if tags else ""
         return userinfo
 
-    #爬取单个用户的follow，ulr = http://weibo.cn/%uid/follow?page=1
     def getUserFollows(self, uid, params="page=1"):
         time.sleep(2)
         self.switchUserAgent()
@@ -251,7 +193,6 @@ class SinaClient(object):
                 follows['follow_ids'].extend(self.getUserFollows(uid, params=url_params)["follow_ids"]) #将结果集合并
         return follows
     
-    #获取用户粉丝对象UID列表 ulr = http://weibo.cn/%uid/fan?page=1
     def getUserFans(self, uid, params="page=1"):
         time.sleep(2)
         self.switchUserAgent()
@@ -268,14 +209,12 @@ class SinaClient(object):
                 fans['fans_ids'].extend(self.getUserFans(uid, params=url_params)["fans_ids"]) #将结果集合并
         return fans
         
-    #获取用户的发的微博信息
     def getUserTweets(self, uid, tweets_all, params="page=1"):
         self.switchUserAccount(myconf.userlist)
         url = r"http://weibo.cn/%s/profile?%s" %(uid, params)
         text = self.openURL(url)
         soup = BS(text, "html.parser")
         res = soup.find_all("div", {"class":"c"})
-        #规则：如果div中子div数量为1，则为一个原厂文本说说；数量为2，则根据cmt判断是原创图文还是转发文本说说；数量为3，则为转发图文
         tweets_list = []
         for elem in res:
             tweets = {}
@@ -325,7 +264,6 @@ class SinaClient(object):
                 pass
             if tweets:
                 tweets_list.append(json.dumps(tweets))
-        #self.output("\n".join(tweets_list), "output/" + uid + "/" + uid + "_tweets_" + params.replace("=", "") + ".json")
         tweets_all.extend(tweets_list)
 
         next_url = re.findall('<div><a href="(.*?)">下页</a>&nbsp', text) #匹配"下页"内容
